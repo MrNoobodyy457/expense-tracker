@@ -911,8 +911,10 @@
         }
 
         // Update category dropdown
-        function updateCategoryDropdown() {
+        window.updateCategoryDropdown = function() {
             const categorySelect = document.getElementById('category');
+            if (!categorySelect) return;
+            
             const type = window.currentType === 'debt' ? 'expense' : window.currentType;
             
             let options = [...defaultCategories[type]];
@@ -1240,6 +1242,10 @@
         // Modal functions
         function openModal() {
             document.getElementById('transactionModal').classList.add('active');
+            // Initialize dropdown when modal opens
+            if (window.updateCategoryDropdown) {
+                window.updateCategoryDropdown();
+            }
         }
 
         function closeModal() {
@@ -1272,12 +1278,8 @@
             }
 
             // Update category dropdown based on type
-            if (window.currentUser) {
-                const categorySelect = document.getElementById('category');
-                const actualType = type === 'debt' ? 'expense' : type;
-                
-                // This will be populated by updateCategoryDropdown
-                updateCategoryDropdown();
+            if (window.updateCategoryDropdown) {
+                window.updateCategoryDropdown();
             }
         }
 
@@ -1314,10 +1316,12 @@
             }
         });
 
-        // Dummy function for initial load
-        function updateCategoryDropdown() {
-            // Will be replaced by Firebase version
-        }
+        // Initialize category dropdown on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            if (window.updateCategoryDropdown) {
+                window.updateCategoryDropdown();
+            }
+        });
     </script>
 </body>
 </html>
