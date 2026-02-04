@@ -399,6 +399,15 @@
             align-items: center;
         }
 
+        .datetime-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .datetime-group input {
+            flex: 1;
+        }
+
         .category-options select {
             flex: 1;
         }
@@ -826,7 +835,10 @@
 
                     <div class="form-group">
                         <label>Date & Time</label>
-                        <input type="datetime-local" id="datetime" required>
+                        <div class="datetime-group">
+                            <input type="date" id="dateInput" required>
+                            <input type="time" id="timeInput">
+                        </div>
                     </div>
 
                     <button type="submit" class="btn" id="submitBtn">Add Transaction</button>
@@ -844,7 +856,7 @@
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, setDoc, Timestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
         // TODO: Replace with your Firebase config
         const firebaseConfig = {
@@ -1201,9 +1213,25 @@
                 amount: document.getElementById('amount').value,
                 category: document.getElementById('category').value,
                 description: document.getElementById('description').value,
-                datetime: document.getElementById('datetime').value,
-                timestamp: serverTimestamp()
+                category: document.getElementById('category').value,
+                description: document.getElementById('description').value,
+                // datetime field is deprecated in favor of timestamp, but keeping for compatibility if needed? No, let's just use timestamp.
             };
+
+            // info: Construct valid date
+            const dateVal = document.getElementById('dateInput').value;
+            const timeVal = document.getElementById('timeInput').value;
+
+            let finalDate;
+            if (timeVal) {
+                finalDate = new Date(`${dateVal}T${timeVal}`);
+            } else {
+                // If no time selected, default to 00:00 local time
+                finalDate = new Date(`${dateVal}T00:00`);
+            }
+
+            transactionData.timestamp = Timestamp.fromDate(finalDate);
+            transactionData.datetime = finalDate.toISOString(); // keep string version for easy reading/fallback
 
             if (window.currentType === 'debt') {
                 transactionData.person = document.getElementById('person').value;
@@ -1236,7 +1264,30 @@
             document.getElementById('editingId').value = id;
             document.getElementById('amount').value = transaction.amount;
             document.getElementById('description').value = transaction.description || '';
-            document.getElementById('datetime').value = transaction.datetime;
+            document.getElementById('amount').value = transaction.amount;
+            document.getElementById('description').value = transaction.description || '';
+
+            // Set Date and Time
+            let dateObj;
+            if (transaction.timestamp) {
+                dateObj = transaction.timestamp.toDate();
+            } else if (transaction.datetime) {
+                dateObj = new Date(transaction.datetime);
+            } else {
+                dateObj = new Date();
+            }
+
+            // user-local YYYY-MM-DD
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            document.getElementById('dateInput').value = `${year}-${month}-${day}`;
+
+            // user-local HH:mm
+            const hours = String(dateObj.getHours()).padStart(2, '0');
+            const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+            document.getElementById('timeInput').value = `${hours}:${minutes}`;
+
             document.getElementById('submitBtn').textContent = 'Update Transaction';
             document.getElementById('deleteBtn').style.display = 'block';
 
@@ -1278,19 +1329,19 @@
     </script>
 
     <script>
-        // Helper to get local datetime string for input
-        function getLocalDateTimeString() {
+        // // Helper removed as we now use simple date/time inputs
+
+        // Set default date to today
+        function setDefaults() {
             const now = new Date();
             const year = now.getFullYear();
             const month = String(now.getMonth() + 1).padStart(2, '0');
             const day = String(now.getDate()).padStart(2, '0');
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            return `${year}-${month}-${day}T${hours}:${minutes}`;
+            document.getElementById('dateInput').value = `${year}-${month}-${day}`;
+            document.getElementById('timeInput').value = ''; // Optional, defaulting to empty
         }
 
-        // Set default datetime
-        document.getElementById('datetime').value = getLocalDateTimeString();
+        setDefaults();
 
         // Modal functions
         function openModal() {
@@ -1308,8 +1359,7 @@
             document.getElementById('modalTitle').textContent = 'Add Transaction';
             document.getElementById('submitBtn').textContent = 'Add Transaction';
             document.getElementById('deleteBtn').style.display = 'none';
-            document.getElementById('deleteBtn').style.display = 'none';
-            document.getElementById('datetime').value = getLocalDateTimeString();
+            setDefaults();
         }
 
         function switchTab(type) {
