@@ -1077,7 +1077,15 @@
             }
 
             const transactionHtml = (t) => {
-                const date = t.timestamp?.toDate() || new Date(t.datetime);
+                let date;
+                if (t.timestamp && typeof t.timestamp.toDate === 'function') {
+                    date = t.timestamp.toDate();
+                } else if (t.datetime) {
+                    date = new Date(t.datetime);
+                } else {
+                    date = new Date(); // Fallback if absolutely no date
+                }
+
                 const dateStr = date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
                 const timeStr = date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 
