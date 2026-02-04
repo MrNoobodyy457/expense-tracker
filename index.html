@@ -1278,8 +1278,19 @@
     </script>
 
     <script>
+        // Helper to get local datetime string for input
+        function getLocalDateTimeString() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
         // Set default datetime
-        document.getElementById('datetime').value = new Date().toISOString().slice(0, 16);
+        document.getElementById('datetime').value = getLocalDateTimeString();
 
         // Modal functions
         function openModal() {
@@ -1297,7 +1308,8 @@
             document.getElementById('modalTitle').textContent = 'Add Transaction';
             document.getElementById('submitBtn').textContent = 'Add Transaction';
             document.getElementById('deleteBtn').style.display = 'none';
-            document.getElementById('datetime').value = new Date().toISOString().slice(0, 16);
+            document.getElementById('deleteBtn').style.display = 'none';
+            document.getElementById('datetime').value = getLocalDateTimeString();
         }
 
         function switchTab(type) {
