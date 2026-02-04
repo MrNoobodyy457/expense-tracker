@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Expense Tracker</title>
     <meta name="theme-color" content="#6366f1">
     <link rel="manifest" href="manifest.json">
-    
+
     <style>
         * {
             margin: 0;
@@ -169,10 +170,21 @@
             margin-bottom: 5px;
         }
 
-        .stat-value.expense { color: var(--expense-color); }
-        .stat-value.income { color: var(--income-color); }
-        .stat-value.balance { color: var(--accent-primary); }
-        .stat-value.debt { color: var(--debt-color); }
+        .stat-value.expense {
+            color: var(--expense-color);
+        }
+
+        .stat-value.income {
+            color: var(--income-color);
+        }
+
+        .stat-value.balance {
+            color: var(--accent-primary);
+        }
+
+        .stat-value.debt {
+            color: var(--debt-color);
+        }
 
         /* Quick Add Button */
         .quick-add-btn {
@@ -234,6 +246,7 @@
                 opacity: 0;
                 transform: translateY(50px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -278,7 +291,9 @@
             font-weight: 600;
         }
 
-        input, select, textarea {
+        input,
+        select,
+        textarea {
             width: 100%;
             background: var(--bg-primary);
             border: 2px solid var(--border-color);
@@ -309,7 +324,9 @@
             font-size: 15px;
         }
 
-        input:focus, select:focus, textarea:focus {
+        input:focus,
+        select:focus,
+        textarea:focus {
             outline: none;
             border-color: var(--accent-primary);
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
@@ -479,9 +496,17 @@
             text-align: right;
         }
 
-        .transaction-amount.expense { color: var(--expense-color); }
-        .transaction-amount.income { color: var(--income-color); }
-        .transaction-amount.debt { color: var(--debt-color); }
+        .transaction-amount.expense {
+            color: var(--expense-color);
+        }
+
+        .transaction-amount.income {
+            color: var(--income-color);
+        }
+
+        .transaction-amount.debt {
+            color: var(--debt-color);
+        }
 
         .empty-state {
             text-align: center;
@@ -573,8 +598,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         /* Auth Section */
@@ -639,6 +669,7 @@
         }
     </style>
 </head>
+
 <body>
     <!-- Auth Section -->
     <div id="authSection" class="auth-section" style="display: none;">
@@ -761,7 +792,7 @@
 
                 <form id="transactionForm" onsubmit="saveTransaction(event)">
                     <input type="hidden" id="editingId">
-                    
+
                     <div class="form-group">
                         <label>Amount (₹)</label>
                         <input type="number" id="amount" step="0.01" required>
@@ -799,7 +830,8 @@
                     </div>
 
                     <button type="submit" class="btn" id="submitBtn">Add Transaction</button>
-                    <button type="button" class="btn btn-danger" id="deleteBtn" style="display: none;" onclick="deleteTransaction()">Delete Transaction</button>
+                    <button type="button" class="btn btn-danger" id="deleteBtn" style="display: none;"
+                        onclick="deleteTransaction()">Delete Transaction</button>
                 </form>
             </div>
         </div>
@@ -816,12 +848,12 @@
 
         // TODO: Replace with your Firebase config
         const firebaseConfig = {
-          apiKey: "AIzaSyD_DuQkEGHyvbpD0y4BqSZkXA4H4zBRknQ",
-          authDomain: "expense-tracker-94735.firebaseapp.com",
-          projectId: "expense-tracker-94735",
-          storageBucket: "expense-tracker-94735.firebasestorage.app",
-          messagingSenderId: "799912028440",
-          appId: "1:799912028440:web:3353b4eb9fb6a36012966d"
+            apiKey: "AIzaSyD_DuQkEGHyvbpD0y4BqSZkXA4H4zBRknQ",
+            authDomain: "expense-tracker-94735.firebaseapp.com",
+            projectId: "expense-tracker-94735",
+            storageBucket: "expense-tracker-94735.firebasestorage.app",
+            messagingSenderId: "799912028440",
+            appId: "1:799912028440:web:3353b4eb9fb6a36012966d"
         };
 
         const app = initializeApp(firebaseConfig);
@@ -862,6 +894,8 @@
                 window.currentUser = user;
                 document.getElementById('authSection').style.display = 'none';
                 document.getElementById('mainApp').style.display = 'block';
+                // Initialize dropdown immediately with defaults
+                window.updateCategoryDropdown();
                 await loadCustomCategories();
                 loadTransactions();
             } else {
@@ -911,22 +945,30 @@
         }
 
         // Update category dropdown
-        window.updateCategoryDropdown = function() {
+        window.updateCategoryDropdown = function () {
             const categorySelect = document.getElementById('category');
             if (!categorySelect) return;
-            
-            const type = window.currentType === 'debt' ? 'expense' : window.currentType;
-            
-            let options = [...defaultCategories[type]];
-            
-            // Add custom categories
-            window.customCategories
-                .filter(cat => cat.type === type)
-                .forEach(cat => {
-                    options.push({ value: cat.value, label: cat.label });
-                });
 
-            categorySelect.innerHTML = options.map(opt => 
+            const currentType = window.currentType || 'expense';
+            const type = currentType === 'debt' ? 'expense' : currentType;
+
+            if (!defaultCategories[type]) {
+                console.warn('Default categories not found for type:', type);
+                return;
+            }
+
+            let options = [...defaultCategories[type]];
+
+            // Add custom categories
+            if (Array.isArray(window.customCategories)) {
+                window.customCategories
+                    .filter(cat => cat.type === type)
+                    .forEach(cat => {
+                        options.push({ value: cat.value, label: cat.label });
+                    });
+            }
+
+            categorySelect.innerHTML = options.map(opt =>
                 `<option value="${opt.value}">${opt.label}</option>`
             ).join('');
         }
@@ -938,7 +980,7 @@
 
             const emoji = prompt('Enter emoji for category (optional):') || '📌';
             const type = window.currentType === 'debt' ? 'expense' : window.currentType;
-            
+
             const newCategory = {
                 value: categoryName.toLowerCase().replace(/\s+/g, '_'),
                 label: `${emoji} ${categoryName}`,
@@ -949,7 +991,7 @@
 
             const categoriesRef = doc(db, `users/${window.currentUser.uid}/settings/categories`);
             await setDoc(categoriesRef, { custom: window.customCategories }, { merge: true });
-            
+
             updateCategoryDropdown();
             document.getElementById('category').value = newCategory.value;
         };
@@ -1009,7 +1051,7 @@
         function renderTransactions() {
             const recentList = document.getElementById('recentTransactionsList');
             const allList = document.getElementById('allTransactionsList');
-            
+
             if (window.transactions.length === 0) {
                 const emptyHtml = `
                     <div class="empty-state">
@@ -1026,7 +1068,7 @@
                 const date = t.timestamp?.toDate() || new Date(t.datetime);
                 const dateStr = date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
                 const timeStr = date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-                
+
                 return `
                     <div class="transaction-item" onclick="editTransaction('${t.id}')">
                         <div class="transaction-info">
@@ -1050,7 +1092,7 @@
         // Update analysis
         function updateAnalysis() {
             const expenses = window.transactions.filter(t => t.type === 'expense');
-            
+
             // Category breakdown
             const categoryData = {};
             expenses.forEach(t => {
@@ -1092,7 +1134,7 @@
                     responsive: true,
                     maintainAspectRatio: true,
                     plugins: {
-                        legend: { 
+                        legend: {
                             display: true,
                             labels: { color: getComputedStyle(document.documentElement).getPropertyValue('--text-primary') }
                         }
@@ -1132,7 +1174,7 @@
                     responsive: true,
                     maintainAspectRatio: true,
                     plugins: {
-                        legend: { 
+                        legend: {
                             labels: { color: getComputedStyle(document.documentElement).getPropertyValue('--text-primary') }
                         }
                     },
@@ -1200,7 +1242,7 @@
 
             window.currentType = transaction.type;
             switchTab(transaction.type);
-            
+
             // Wait for category dropdown to update
             setTimeout(() => {
                 document.getElementById('category').value = transaction.category;
@@ -1260,13 +1302,13 @@
 
         function switchTab(type) {
             window.currentType = type;
-            
+
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
             event.target?.classList.add('active');
 
             const personGroup = document.getElementById('personGroup');
             const debtDirectionGroup = document.getElementById('debtDirectionGroup');
-            
+
             if (type === 'debt') {
                 personGroup.style.display = 'block';
                 debtDirectionGroup.style.display = 'block';
@@ -1296,7 +1338,7 @@
             const icon = document.querySelector('.theme-toggle');
             icon.textContent = document.body.classList.contains('light-mode') ? '☀️' : '🌙';
             localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark');
-            
+
             // Update charts with new colors
             if (window.updateAnalysis) {
                 setTimeout(() => window.updateAnalysis(), 100);
@@ -1324,4 +1366,5 @@
         });
     </script>
 </body>
+
 </html>
