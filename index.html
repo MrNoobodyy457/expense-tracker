@@ -1188,7 +1188,7 @@
             const categoryData = {};
             relevantTransactions.forEach(t => {
                 const amount = parseFloat(t.amount);
-                const cat = t.category || 'other';
+                const cat = (t.category || 'other').toLowerCase();
 
                 if (t.type === 'expense') {
                     categoryData[cat] = (categoryData[cat] || 0) + amount;
