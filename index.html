@@ -1179,18 +1179,29 @@
 
         // Update analysis
         function updateAnalysis() {
-            const expenses = window.transactions.filter(t => t.type === 'expense');
+            // Net Spending Logic: Expenses (positive) - Non-Parent Income (negative)
+            const relevantTransactions = window.transactions.filter(t =>
+                t.type === 'expense' || (t.type === 'income' && (t.category || '').toLowerCase() !== 'parents')
+            );
 
             // Category breakdown
             const categoryData = {};
-            expenses.forEach(t => {
+            relevantTransactions.forEach(t => {
+                const amount = parseFloat(t.amount);
                 const cat = t.category || 'other';
-                categoryData[cat] = (categoryData[cat] || 0) + parseFloat(t.amount);
+
+                if (t.type === 'expense') {
+                    categoryData[cat] = (categoryData[cat] || 0) + amount;
+                } else {
+                    // Reimbursement
+                    categoryData[cat] = (categoryData[cat] || 0) - amount;
+                }
             });
 
             // Sort and get top categories
             const sortedCategories = Object.entries(categoryData)
-                .sort((a, b) => b[1] - a[1])
+                .sort((a, b) => b[1] - a[1]) // Sort by highest net spend
+                .filter(([, amount]) => amount > 0) // Only show positive net spend in breakdown
                 .slice(0, 5);
 
             // Update top categories list
@@ -1198,7 +1209,7 @@
             document.getElementById('topCategories').innerHTML = sortedCategories.map(([cat, amount], i) => `
                 <div class="category-item">
                     <div class="category-name">
-                        <div class="category-color" style="background: ${colors[i]}"></div>
+                        <div class="category-color" style="background: ${colors[i % colors.length]}"></div>
                         <span>${cat}</span>
                     </div>
                     <div class="category-amount">₹${amount.toFixed(2)}</div>
@@ -1232,10 +1243,16 @@
 
             // Monthly trend
             const monthlyData = {};
-            expenses.forEach(t => {
+            relevantTransactions.forEach(t => {
+                const amount = parseFloat(t.amount);
                 const date = t.timestamp?.toDate() || new Date(t.datetime);
                 const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                monthlyData[monthKey] = (monthlyData[monthKey] || 0) + parseFloat(t.amount);
+
+                if (t.type === 'expense') {
+                    monthlyData[monthKey] = (monthlyData[monthKey] || 0) + amount;
+                } else {
+                    monthlyData[monthKey] = (monthlyData[monthKey] || 0) - amount;
+                }
             });
 
             const sortedMonths = Object.entries(monthlyData).sort().slice(-6);
