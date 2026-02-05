@@ -278,6 +278,31 @@
             color: var(--expense-color);
         }
 
+        .settled-badge {
+            background: var(--income-color);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .settle-btn {
+            background: transparent;
+            border: 1px solid var(--accent-primary);
+            color: var(--accent-primary);
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .settle-btn:hover {
+            background: var(--accent-primary);
+            color: white;
+        }
+
         /* Form - IMPROVED STYLING */
         .form-group {
             margin-bottom: 20px;
@@ -1049,7 +1074,9 @@
                         monthExpenses += amount;
                     }
                 } else if (t.type === 'debt' && t.debtDirection === 'they_owe') {
-                    totalDebt += amount;
+                    if (!t.settled) {
+                        totalDebt += amount;
+                    }
                 }
             });
 
@@ -1089,13 +1116,35 @@
                 const dateStr = date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
                 const timeStr = date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 
+                // Logic for Debt display
+                let metaText = '';
+                if (t.type === 'debt') {
+                    // Hide time for debt
+                    metaText = `${dateStr} • ${t.category}`;
+                } else {
+                    metaText = `${dateStr} at ${timeStr} • ${t.category}`;
+                }
+
+                if (t.person) metaText += ` • ${t.person}`;
+
+                let actionHtml = '';
+                if (t.type === 'debt') {
+                    if (t.settled) {
+                        actionHtml = `<span class="settled-badge">Settled</span>`;
+                    } else {
+                        actionHtml = `<button class="settle-btn" onclick="event.stopPropagation(); openSettleModal('${t.id}')">Settle</button>`;
+                    }
+                }
+
                 return `
                     <div class="transaction-item" onclick="editTransaction('${t.id}')">
                         <div class="transaction-info">
-                            <div class="transaction-description">${t.description || t.category}</div>
+                            <div class="transaction-description">
+                                ${t.description || t.category} 
+                                ${t.type === 'debt' ? actionHtml : ''}
+                            </div>
                             <div class="transaction-meta">
-                                ${dateStr} at ${timeStr} • ${t.category}
-                                ${t.person ? ` • ${t.person}` : ''}
+                                ${metaText}
                             </div>
                         </div>
                         <div class="transaction-amount ${t.type}">
@@ -1327,6 +1376,53 @@
                 document.getElementById('editingId').value = '';
             } catch (error) {
                 alert('Error deleting transaction: ' + error.message);
+            }
+        };
+
+        // Settle functions
+        window.openSettleModal = (id) => {
+            document.getElementById('settleId').value = id;
+            document.getElementById('settleModal').classList.add('active');
+
+            // Default to today
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            document.getElementById('settleDate').value = `${year}-${month}-${day}`;
+            document.getElementById('settleTime').value = '';
+        };
+
+        window.closeSettleModal = () => {
+            document.getElementById('settleModal').classList.remove('active');
+            document.getElementById('settleId').value = '';
+        };
+
+        window.confirmSettle = async () => {
+            const id = document.getElementById('settleId').value;
+            const dateVal = document.getElementById('settleDate').value;
+            const timeVal = document.getElementById('settleTime').value;
+
+            if (!dateVal) {
+                alert('Date is required');
+                return;
+            }
+
+            let finalDate;
+            if (timeVal) {
+                finalDate = new Date(`${dateVal}T${timeVal}`);
+            } else {
+                finalDate = new Date(`${dateVal}T00:00`);
+            }
+
+            try {
+                await updateDoc(doc(db, `users/${window.currentUser.uid}/transactions/${id}`), {
+                    settled: true,
+                    settleDate: Timestamp.fromDate(finalDate)
+                });
+                closeSettleModal();
+            } catch (error) {
+                alert('Error settling debt: ' + error.message);
             }
         };
 
