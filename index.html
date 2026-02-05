@@ -874,6 +874,25 @@
         </div>
     </div>
 
+    <!-- Settle Debt Modal -->
+    <div id="settleModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settle Debt</h2>
+                <button class="close-btn" onclick="closeSettleModal()">&times;</button>
+            </div>
+            <input type="hidden" id="settleId">
+            <div class="form-group">
+                <label>Settled Date & Time</label>
+                <div class="datetime-group">
+                    <input type="date" id="settleDate" required>
+                    <input type="time" id="settleTime">
+                </div>
+            </div>
+            <button class="btn" onclick="confirmSettle()">Confirm Settlement</button>
+        </div>
+    </div>
+
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
