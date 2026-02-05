@@ -1132,7 +1132,7 @@
                     if (t.settled) {
                         actionHtml = `<span class="settled-badge">Settled</span>`;
                     } else {
-                        actionHtml = `<button class="settle-btn" onclick="event.stopPropagation(); openSettleModal('${t.id}')">Settle</button>`;
+                        actionHtml = `<button class="settle-btn" onclick="openSettleModal('${t.id}', event)">Settle</button>`;
                     }
                 }
 
@@ -1380,7 +1380,10 @@
         };
 
         // Settle functions
-        window.openSettleModal = (id) => {
+        window.openSettleModal = (id, event) => {
+            if (event) {
+                event.stopPropagation();
+            }
             document.getElementById('settleId').value = id;
             document.getElementById('settleModal').classList.add('active');
 
