@@ -900,7 +900,7 @@
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, setDoc, Timestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, setDoc, getDoc, Timestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
         // TODO: Replace with your Firebase config
         const firebaseConfig = {
@@ -1455,12 +1455,47 @@
             }
 
             try {
-                await updateDoc(doc(db, `users/${window.currentUser.uid}/transactions/${id}`), {
+                // Fetch the original transaction to get details
+                const txRef = doc(db, `users/${window.currentUser.uid}/transactions/${id}`);
+                const txSnap = await getDoc(txRef);
+
+                if (!txSnap.exists()) {
+                    alert('Transaction not found');
+                    return;
+                }
+
+                const txData = txSnap.data();
+
+                // Determine new type and category
+                let newType = 'income'; // Default for "They owe me"
+                let newCategory = 'friends';
+
+                if (txData.debtDirection === 'i_owe') {
+                    newType = 'expense';
+                    newCategory = 'other'; // Or keep original if we tracked it
+                }
+
+                // Construct new description
+                const personName = txData.person || 'Unknown';
+                const originalDesc = txData.description || 'Debt Settlement';
+                const newDescription = `${originalDesc} - ${personName}`;
+
+                // Update the transaction
+                await updateDoc(txRef, {
+                    type: newType,
+                    category: newCategory,
+                    description: newDescription,
                     settled: true,
-                    settleDate: Timestamp.fromDate(finalDate)
+                    settleDate: Timestamp.fromDate(finalDate),
+                    // Also update the main transaction date to the settlement date
+                    // so it shows up in today's income/expense
+                    timestamp: Timestamp.fromDate(finalDate),
+                    datetime: finalDate.toISOString()
                 });
+
                 closeSettleModal();
             } catch (error) {
+                console.error(error);
                 alert('Error settling debt: ' + error.message);
             }
         };
