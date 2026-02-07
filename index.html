@@ -1107,8 +1107,8 @@
                 if (t.type === 'income') {
                     totalIncome += amount;
                 }
-                // Expense OR Debt (They owe me = I paid for them = Expense)
-                else if (t.type === 'expense' || (t.type === 'debt' && t.debtDirection === 'they_owe')) {
+                // Expense
+                else if (t.type === 'expense') {
                     totalExpenses += amount;
                     if (tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear) {
                         monthExpenses += amount;
@@ -1179,29 +1179,6 @@
                     actionHtml = `<button class="settle-btn" onclick="openSettleModal('${t.id}', event)">Settle</button>`;
                 }
 
-                // Determine display class
-                let amountClass = t.type;
-                let sign = '+';
-
-                if (t.type === 'expense') {
-                    sign = '-';
-                } else if (t.type === 'debt') {
-                    // treat debt as expense visually if 'they owe me'
-                    if (t.debtDirection === 'they_owe') {
-                        amountClass = 'debt'; // Revert back to debt color
-                        sign = '-';
-                    } else {
-                        // 'i owe them' -> I received value but haven't paid.
-                        // Technically this is like income (cash retained) or just neutral until paid?
-                        // For simplicity let's keep it neutral or positive?
-                        // Actually, standard accounting: Expense + Liability.
-                        // For this simple app, "I owe" means I will have to pay later. 
-                        // Let's keep it orange (debt color) but no sign? 
-                        amountClass = 'debt';
-                        sign = '';
-                    }
-                }
-
                 return `
                     <div class="transaction-item" onclick="editTransaction('${t.id}')">
                         <div class="transaction-info">
@@ -1213,8 +1190,8 @@
                                 ${metaText}
                             </div>
                         </div>
-                        <div class="transaction-amount ${amountClass}">
-                            ${sign}₹${parseFloat(t.amount).toFixed(2)}
+                        <div class="transaction-amount ${t.type}">
+                            ${t.type === 'expense' ? '-' : '+'}₹${parseFloat(t.amount).toFixed(2)}
                         </div>
                     </div>
                 `;
@@ -1228,9 +1205,7 @@
         function updateAnalysis() {
             // Net Spending Logic: Expenses (positive) - Non-Parent Income (negative)
             const relevantTransactions = window.transactions.filter(t =>
-                t.type === 'expense' ||
-                (t.type === 'debt' && t.debtDirection === 'they_owe') ||
-                (t.type === 'income' && (t.category || '').toLowerCase() !== 'parents')
+                t.type === 'expense' || (t.type === 'income' && (t.category || '').toLowerCase() !== 'parents')
             );
 
             // Category breakdown
@@ -1239,10 +1214,10 @@
                 const amount = parseFloat(t.amount);
                 const cat = (t.category || 'other').toLowerCase();
 
-                if (t.type === 'expense' || (t.type === 'debt' && t.debtDirection === 'they_owe')) {
+                if (t.type === 'expense') {
                     categoryData[cat] = (categoryData[cat] || 0) + amount;
                 } else {
-                    // Reimbursement (Income)
+                    // Reimbursement
                     categoryData[cat] = (categoryData[cat] || 0) - amount;
                 }
             });
@@ -1297,7 +1272,7 @@
                 const date = t.timestamp?.toDate() || new Date(t.datetime);
                 const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
-                if (t.type === 'expense' || (t.type === 'debt' && t.debtDirection === 'they_owe')) {
+                if (t.type === 'expense') {
                     monthlyData[monthKey] = (monthlyData[monthKey] || 0) + amount;
                 } else {
                     monthlyData[monthKey] = (monthlyData[monthKey] || 0) - amount;
@@ -1515,27 +1490,33 @@
 
                 const txData = txSnap.data();
 
-                // Create a NEW Income transaction
+                // Determine new type and category
+                let newType = 'income'; // Default for "They owe me"
+                // Preserve original category so it nets off against the original expense
+                let newCategory = txData.category || 'other';
+
+                if (txData.debtDirection === 'i_owe') {
+                    newType = 'expense';
+                    // Keep original category for "I owe" as well
+                    newCategory = txData.category || 'other';
+                }
+
+                // Construct new description
                 const personName = txData.person || 'Unknown';
-                const originalDesc = txData.description || 'Debt';
+                const originalDesc = txData.description || 'Debt Settlement';
+                const newDescription = `${originalDesc} - ${personName}`;
 
-                const newIncomeData = {
-                    type: 'income',
-                    amount: txData.amount,
-                    category: txData.category || 'other', // PRESERVE CATEGORY for analysis netting
-                    description: `Settlement: ${originalDesc} - ${personName}`,
-                    timestamp: Timestamp.fromDate(finalDate),
-                    datetime: finalDate.toISOString(), // keep string version
-                    linkedDebtId: id // Link back to original debt
-                };
-
-                const incomeRef = await addDoc(collection(db, `users/${window.currentUser.uid}/transactions`), newIncomeData);
-
-                // Update the original Debt transaction
+                // Update the transaction
                 await updateDoc(txRef, {
+                    type: newType,
+                    category: newCategory,
+                    description: newDescription,
                     settled: true,
                     settleDate: Timestamp.fromDate(finalDate),
-                    settlementId: incomeRef.id // Store ID of the settlement income
+                    // Also update the main transaction date to the settlement date
+                    // so it shows up in today's income/expense
+                    timestamp: Timestamp.fromDate(finalDate),
+                    datetime: finalDate.toISOString()
                 });
 
                 closeSettleModal();
@@ -1549,25 +1530,15 @@
             if (event) {
                 event.stopPropagation();
             }
-            if (!confirm('Are you sure you want to reverse this settlement? This will delete the settlement income record.')) return;
+            if (!confirm('Are you sure you want to reverse this settlement? It will revert to a pending debt.')) return;
 
             try {
                 const txRef = doc(db, `users/${window.currentUser.uid}/transactions/${id}`);
-                const txSnap = await getDoc(txRef);
-
-                if (!txSnap.exists()) return;
-                const txData = txSnap.data();
-
-                // Delete the linked income transaction if it exists
-                if (txData.settlementId) {
-                    await deleteDoc(doc(db, `users/${window.currentUser.uid}/transactions/${txData.settlementId}`));
-                }
-
-                // Revert the debt transaction
                 await updateDoc(txRef, {
-                    settled: false,
-                    settleDate: null, // Remove field
-                    settlementId: null // Remove field
+                    type: 'debt',
+                    settled: false
+                    // Note: We keep the updated date and description as-is or we could try to revert if we stored prev state, 
+                    // but simplicity is key here. The user just wants to test settlement again.
                 });
             } catch (error) {
                 console.error(error);
