@@ -1147,12 +1147,15 @@
                 if (t.person) metaText += ` • ${t.person}`;
 
                 let actionHtml = '';
-                if (t.type === 'debt') {
-                    if (t.settled) {
-                        actionHtml = `<span class="settled-badge">Settled</span>`;
-                    } else {
-                        actionHtml = `<button class="settle-btn" onclick="openSettleModal('${t.id}', event)">Settle</button>`;
-                    }
+                if (t.settled) {
+                    // Show Unsettle button for ANY settled transaction (legacy debt or converted income/expense)
+                    actionHtml = `
+                        <span class="settled-badge">Settled</span>
+                        <button class="settle-btn" style="color: var(--expense-color); border-color: var(--expense-color); margin-left: 5px;" 
+                                onclick="unsettleTransaction('${t.id}', event)">Unsettle</button>
+                    `;
+                } else if (t.type === 'debt') {
+                    actionHtml = `<button class="settle-btn" onclick="openSettleModal('${t.id}', event)">Settle</button>`;
                 }
 
                 return `
@@ -1160,7 +1163,7 @@
                         <div class="transaction-info">
                             <div class="transaction-description">
                                 ${t.description || t.category} 
-                                ${t.type === 'debt' ? actionHtml : ''}
+                                ${actionHtml}
                             </div>
                             <div class="transaction-meta">
                                 ${metaText}
@@ -1497,6 +1500,26 @@
             } catch (error) {
                 console.error(error);
                 alert('Error settling debt: ' + error.message);
+            }
+        };
+
+        window.unsettleTransaction = async (id, event) => {
+            if (event) {
+                event.stopPropagation();
+            }
+            if (!confirm('Are you sure you want to reverse this settlement? It will revert to a pending debt.')) return;
+
+            try {
+                const txRef = doc(db, `users/${window.currentUser.uid}/transactions/${id}`);
+                await updateDoc(txRef, {
+                    type: 'debt',
+                    settled: false
+                    // Note: We keep the updated date and description as-is or we could try to revert if we stored prev state, 
+                    // but simplicity is key here. The user just wants to test settlement again.
+                });
+            } catch (error) {
+                console.error(error);
+                alert('Error unsettling transaction: ' + error.message);
             }
         };
 
