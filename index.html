@@ -1015,6 +1015,16 @@
 
             let options = [...defaultCategories[type]];
 
+            // If type is INCOME, also include expense categories (for reimbursements)
+            if (type === 'income') {
+                const expenseCats = defaultCategories['expense'];
+                if (expenseCats) {
+                    // Add a separator or just append
+                    // options.push({ value: '', label: '--- Reimbursements ---', disabled: true }); // Optional: visual separator
+                    options.push(...expenseCats);
+                }
+            }
+
             // Add custom categories
             if (Array.isArray(window.customCategories)) {
                 window.customCategories
@@ -1024,8 +1034,16 @@
                     });
             }
 
-            categorySelect.innerHTML = options.map(opt =>
-                `<option value="${opt.value}">${opt.label}</option>`
+            // Uniqueness check (simple one based on value)
+            const seen = new Set();
+            const uniqueOptions = options.filter(opt => {
+                if (seen.has(opt.value)) return false;
+                seen.add(opt.value);
+                return true;
+            });
+
+            categorySelect.innerHTML = uniqueOptions.map(opt =>
+                `<option value="${opt.value}" ${opt.disabled ? 'disabled' : ''}>${opt.label}</option>`
             ).join('');
         }
 
@@ -1471,11 +1489,13 @@
 
                 // Determine new type and category
                 let newType = 'income'; // Default for "They owe me"
-                let newCategory = 'friends';
+                // Preserve original category so it nets off against the original expense
+                let newCategory = txData.category || 'other';
 
                 if (txData.debtDirection === 'i_owe') {
                     newType = 'expense';
-                    newCategory = 'other'; // Or keep original if we tracked it
+                    // Keep original category for "I owe" as well
+                    newCategory = txData.category || 'other';
                 }
 
                 // Construct new description
