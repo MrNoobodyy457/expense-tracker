@@ -1188,7 +1188,7 @@
                 } else if (t.type === 'debt') {
                     // treat debt as expense visually if 'they owe me'
                     if (t.debtDirection === 'they_owe') {
-                        amountClass = 'expense'; // Use red color
+                        amountClass = 'debt'; // Revert back to debt color
                         sign = '-';
                     } else {
                         // 'i owe them' -> I received value but haven't paid.
