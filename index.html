@@ -1103,17 +1103,21 @@
                 const amount = parseFloat(t.amount);
                 const tDate = t.timestamp?.toDate() || new Date(t.datetime);
 
+                // Income
                 if (t.type === 'income') {
                     totalIncome += amount;
-                } else if (t.type === 'expense') {
+                }
+                // Expense OR Debt (They owe me = I paid for them = Expense)
+                else if (t.type === 'expense' || (t.type === 'debt' && t.debtDirection === 'they_owe')) {
                     totalExpenses += amount;
                     if (tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear) {
                         monthExpenses += amount;
                     }
-                } else if (t.type === 'debt' && t.debtDirection === 'they_owe') {
-                    if (!t.settled) {
-                        totalDebt += amount;
-                    }
+                }
+
+                // Calculate Pending Debts (They owe me AND not settled)
+                if (t.type === 'debt' && t.debtDirection === 'they_owe' && !t.settled) {
+                    totalDebt += amount;
                 }
             });
 
@@ -1123,7 +1127,7 @@
             document.getElementById('totalDebt').textContent = `₹${totalDebt.toFixed(2)}`;
         }
 
-        // Render transactions
+        // Render transactions - visual update for Debt to look like Expense
         function renderTransactions() {
             const recentList = document.getElementById('recentTransactionsList');
             const allList = document.getElementById('allTransactionsList');
@@ -1166,7 +1170,6 @@
 
                 let actionHtml = '';
                 if (t.settled) {
-                    // Show Unsettle button for ANY settled transaction (legacy debt or converted income/expense)
                     actionHtml = `
                         <span class="settled-badge">Settled</span>
                         <button class="settle-btn" style="color: var(--expense-color); border-color: var(--expense-color); margin-left: 5px;" 
@@ -1174,6 +1177,29 @@
                     `;
                 } else if (t.type === 'debt') {
                     actionHtml = `<button class="settle-btn" onclick="openSettleModal('${t.id}', event)">Settle</button>`;
+                }
+
+                // Determine display class
+                let amountClass = t.type;
+                let sign = '+';
+
+                if (t.type === 'expense') {
+                    sign = '-';
+                } else if (t.type === 'debt') {
+                    // treat debt as expense visually if 'they owe me'
+                    if (t.debtDirection === 'they_owe') {
+                        amountClass = 'expense'; // Use red color
+                        sign = '-';
+                    } else {
+                        // 'i owe them' -> I received value but haven't paid.
+                        // Technically this is like income (cash retained) or just neutral until paid?
+                        // For simplicity let's keep it neutral or positive?
+                        // Actually, standard accounting: Expense + Liability.
+                        // For this simple app, "I owe" means I will have to pay later. 
+                        // Let's keep it orange (debt color) but no sign? 
+                        amountClass = 'debt';
+                        sign = '';
+                    }
                 }
 
                 return `
@@ -1187,8 +1213,8 @@
                                 ${metaText}
                             </div>
                         </div>
-                        <div class="transaction-amount ${t.type}">
-                            ${t.type === 'expense' ? '-' : '+'}₹${parseFloat(t.amount).toFixed(2)}
+                        <div class="transaction-amount ${amountClass}">
+                            ${sign}₹${parseFloat(t.amount).toFixed(2)}
                         </div>
                     </div>
                 `;
@@ -1202,7 +1228,9 @@
         function updateAnalysis() {
             // Net Spending Logic: Expenses (positive) - Non-Parent Income (negative)
             const relevantTransactions = window.transactions.filter(t =>
-                t.type === 'expense' || (t.type === 'income' && (t.category || '').toLowerCase() !== 'parents')
+                t.type === 'expense' ||
+                (t.type === 'debt' && t.debtDirection === 'they_owe') ||
+                (t.type === 'income' && (t.category || '').toLowerCase() !== 'parents')
             );
 
             // Category breakdown
@@ -1211,10 +1239,10 @@
                 const amount = parseFloat(t.amount);
                 const cat = (t.category || 'other').toLowerCase();
 
-                if (t.type === 'expense') {
+                if (t.type === 'expense' || (t.type === 'debt' && t.debtDirection === 'they_owe')) {
                     categoryData[cat] = (categoryData[cat] || 0) + amount;
                 } else {
-                    // Reimbursement
+                    // Reimbursement (Income)
                     categoryData[cat] = (categoryData[cat] || 0) - amount;
                 }
             });
@@ -1269,7 +1297,7 @@
                 const date = t.timestamp?.toDate() || new Date(t.datetime);
                 const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
-                if (t.type === 'expense') {
+                if (t.type === 'expense' || (t.type === 'debt' && t.debtDirection === 'they_owe')) {
                     monthlyData[monthKey] = (monthlyData[monthKey] || 0) + amount;
                 } else {
                     monthlyData[monthKey] = (monthlyData[monthKey] || 0) - amount;
@@ -1487,33 +1515,27 @@
 
                 const txData = txSnap.data();
 
-                // Determine new type and category
-                let newType = 'income'; // Default for "They owe me"
-                // Preserve original category so it nets off against the original expense
-                let newCategory = txData.category || 'other';
-
-                if (txData.debtDirection === 'i_owe') {
-                    newType = 'expense';
-                    // Keep original category for "I owe" as well
-                    newCategory = txData.category || 'other';
-                }
-
-                // Construct new description
+                // Create a NEW Income transaction
                 const personName = txData.person || 'Unknown';
-                const originalDesc = txData.description || 'Debt Settlement';
-                const newDescription = `${originalDesc} - ${personName}`;
+                const originalDesc = txData.description || 'Debt';
 
-                // Update the transaction
+                const newIncomeData = {
+                    type: 'income',
+                    amount: txData.amount,
+                    category: txData.category || 'other', // PRESERVE CATEGORY for analysis netting
+                    description: `Settlement: ${originalDesc} - ${personName}`,
+                    timestamp: Timestamp.fromDate(finalDate),
+                    datetime: finalDate.toISOString(), // keep string version
+                    linkedDebtId: id // Link back to original debt
+                };
+
+                const incomeRef = await addDoc(collection(db, `users/${window.currentUser.uid}/transactions`), newIncomeData);
+
+                // Update the original Debt transaction
                 await updateDoc(txRef, {
-                    type: newType,
-                    category: newCategory,
-                    description: newDescription,
                     settled: true,
                     settleDate: Timestamp.fromDate(finalDate),
-                    // Also update the main transaction date to the settlement date
-                    // so it shows up in today's income/expense
-                    timestamp: Timestamp.fromDate(finalDate),
-                    datetime: finalDate.toISOString()
+                    settlementId: incomeRef.id // Store ID of the settlement income
                 });
 
                 closeSettleModal();
@@ -1527,15 +1549,25 @@
             if (event) {
                 event.stopPropagation();
             }
-            if (!confirm('Are you sure you want to reverse this settlement? It will revert to a pending debt.')) return;
+            if (!confirm('Are you sure you want to reverse this settlement? This will delete the settlement income record.')) return;
 
             try {
                 const txRef = doc(db, `users/${window.currentUser.uid}/transactions/${id}`);
+                const txSnap = await getDoc(txRef);
+
+                if (!txSnap.exists()) return;
+                const txData = txSnap.data();
+
+                // Delete the linked income transaction if it exists
+                if (txData.settlementId) {
+                    await deleteDoc(doc(db, `users/${window.currentUser.uid}/transactions/${txData.settlementId}`));
+                }
+
+                // Revert the debt transaction
                 await updateDoc(txRef, {
-                    type: 'debt',
-                    settled: false
-                    // Note: We keep the updated date and description as-is or we could try to revert if we stored prev state, 
-                    // but simplicity is key here. The user just wants to test settlement again.
+                    settled: false,
+                    settleDate: null, // Remove field
+                    settlementId: null // Remove field
                 });
             } catch (error) {
                 console.error(error);
